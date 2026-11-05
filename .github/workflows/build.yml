@@ -16,9 +16,20 @@ jobs:
         shell: powershell
         run: .\build.ps1 -Test
 
+      - name: Verify build output
+        shell: powershell
+        run: |
+          Get-ChildItem -LiteralPath . -Force
+          Get-ChildItem -LiteralPath .\dist -Force
+          if (-not (Test-Path -LiteralPath '.\dist\Inkveil.exe')) {
+            throw 'Inkveil.exe was not produced.'
+          }
+
       - name: Upload application
         uses: actions/upload-artifact@v4
         with:
           name: Inkveil
-          path: dist/Inkveil.exe
+          path: |
+            ${{ github.workspace }}/dist/Inkveil.exe
+            ${{ github.workspace }}/dist/Inkveil.exe.config
           if-no-files-found: error
