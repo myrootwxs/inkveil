@@ -23,6 +23,7 @@ namespace Inkveil
 
         [DataMember] public string LastBookPath { get; set; }
         [DataMember] public int ChapterIndex { get; set; }
+        [DataMember] public double ChapterScrollRatio { get; set; }
         [DataMember] public double FontSize { get; set; }
         [DataMember] public string FontFamilyName { get; set; }
         [DataMember] public string TextTheme { get; set; }

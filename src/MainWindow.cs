@@ -668,10 +668,13 @@ namespace Inkveil
 
             if (!string.IsNullOrEmpty(pathToOpen) && File.Exists(pathToOpen))
             {
-                int preferredIndex = string.Equals(pathToOpen, _settings.LastBookPath, StringComparison.OrdinalIgnoreCase)
-                    ? _settings.ChapterIndex
-                    : 0;
-                LoadBook(pathToOpen, preferredIndex);
+                bool restoreProgress = string.Equals(
+                    pathToOpen,
+                    _settings.LastBookPath,
+                    StringComparison.OrdinalIgnoreCase);
+                int preferredIndex = restoreProgress ? _settings.ChapterIndex : 0;
+                double preferredScrollRatio = restoreProgress ? _settings.ChapterScrollRatio : 0;
+                LoadBook(pathToOpen, preferredIndex, preferredScrollRatio);
             }
             else
             {
@@ -890,7 +893,7 @@ namespace Inkveil
             string path = GetDroppedTextFile(e.Data);
             if (!string.IsNullOrEmpty(path))
             {
-                LoadBook(path, 0);
+                LoadBook(path, 0, 0);
             }
             e.Handled = true;
         }
@@ -937,7 +940,7 @@ namespace Inkveil
                 bool? result = dialog.ShowDialog(this);
                 if (result == true)
                 {
-                    LoadBook(dialog.FileName, 0);
+                    LoadBook(dialog.FileName, 0, 0);
                 }
             }
             catch (Exception ex)
@@ -951,7 +954,7 @@ namespace Inkveil
             }
         }
 
-        private void LoadBook(string path, int preferredIndex)
+        private void LoadBook(string path, int preferredIndex, double preferredScrollRatio)
         {
             try
             {
@@ -963,7 +966,7 @@ namespace Inkveil
                 _emptyPanel.Visibility = Visibility.Collapsed;
                 _reader.Visibility = Visibility.Visible;
                 PopulateChapterList();
-                RenderChapter(false);
+                RenderChapter(preferredScrollRatio);
                 RevealWindow();
                 _suppressHideUntil = DateTime.UtcNow.AddMilliseconds(700);
                 QueueSave();
@@ -1063,12 +1066,12 @@ namespace Inkveil
             }
 
             _chapterIndex = target;
-            RenderChapter(false);
+            RenderChapter(0);
             _suppressHideUntil = DateTime.UtcNow.AddMilliseconds(400);
             QueueSave();
         }
 
-        private void RenderChapter(bool preservePosition)
+        private void RenderChapter(double scrollRatio)
         {
             if (_book == null || _book.Chapters.Count == 0)
             {
@@ -1077,7 +1080,6 @@ namespace Inkveil
 
             _chapterIndex = Clamp(_chapterIndex, 0, _book.Chapters.Count - 1);
             NovelChapter chapter = _book.Chapters[_chapterIndex];
-            double ratio = preservePosition ? GetScrollRatio() : 0;
             double fontSize = Clamp(_settings.FontSize, 15, 42);
             FontFamily bodyFont = GetBodyFontFamily();
 
@@ -1142,7 +1144,7 @@ namespace Inkveil
             _reader.Document = document;
             _chapterButtonText.Text = chapter.Title;
             _reader.Effect = CreateReaderShadow();
-            _pendingScrollRatio = ratio;
+            _pendingScrollRatio = Clamp(scrollRatio, 0, 1);
             _hasPendingScroll = true;
             UpdateNavigationState();
             UpdateReadingStatus();
@@ -1232,7 +1234,7 @@ namespace Inkveil
             _settings.FontSize = next;
             if (_book != null)
             {
-                RenderChapter(true);
+                RenderChapter(GetScrollRatio());
             }
             QueueSave();
         }
@@ -1416,7 +1418,7 @@ namespace Inkveil
             }
             if (renderBook && _book != null)
             {
-                RenderChapter(true);
+                RenderChapter(GetScrollRatio());
             }
             else if (_reader != null && _reader.Document != null)
             {
@@ -1526,7 +1528,7 @@ namespace Inkveil
             _fontCombo.IsDropDownOpen = false;
             if (_book != null)
             {
-                RenderChapter(true);
+                RenderChapter(GetScrollRatio());
             }
             QueueSave();
         }
@@ -1708,6 +1710,9 @@ namespace Inkveil
             {
                 _settings.LastBookPath = _book.FilePath;
                 _settings.ChapterIndex = _chapterIndex;
+                _settings.ChapterScrollRatio = _hasPendingScroll
+                    ? _pendingScrollRatio
+                    : GetScrollRatio();
             }
             _settings.FontSize = Clamp(_settings.FontSize, 15, 42);
             _settings.TextTheme = _lightText ? "light" : "dark";
