@@ -11,6 +11,7 @@ using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Microsoft.Win32;
 
@@ -390,7 +391,7 @@ namespace Inkveil
 
             _emptySubtitle = new TextBlock
             {
-                Text = "拖入 TXT 文件，或按 Ctrl+O 选择\n鼠标离开后，窗口会完全隐入桌面",
+                Text = "拖入 TXT 或 EPUB 文件，或按 Ctrl+O 选择\n鼠标离开后，窗口会完全隐入桌面",
                 FontFamily = new FontFamily("Microsoft YaHei UI"),
                 FontSize = 14,
                 LineHeight = 25,
@@ -889,7 +890,7 @@ namespace Inkveil
 
         private void OnDragOver(object sender, DragEventArgs e)
         {
-            e.Effects = GetDroppedTextFile(e.Data) != null
+            e.Effects = GetDroppedNovelFile(e.Data) != null
                 ? DragDropEffects.Copy
                 : DragDropEffects.None;
             e.Handled = true;
@@ -897,7 +898,7 @@ namespace Inkveil
 
         private void OnDrop(object sender, DragEventArgs e)
         {
-            string path = GetDroppedTextFile(e.Data);
+            string path = GetDroppedNovelFile(e.Data);
             if (!string.IsNullOrEmpty(path))
             {
                 LoadBook(path, 0, 0);
@@ -905,7 +906,7 @@ namespace Inkveil
             e.Handled = true;
         }
 
-        private string GetDroppedTextFile(IDataObject data)
+        private string GetDroppedNovelFile(IDataObject data)
         {
             if (data == null || !data.GetDataPresent(DataFormats.FileDrop))
             {
@@ -922,7 +923,8 @@ namespace Inkveil
             {
                 if (File.Exists(file)
                     && (string.Equals(Path.GetExtension(file), ".txt", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(Path.GetExtension(file), ".md", StringComparison.OrdinalIgnoreCase)))
+                        || string.Equals(Path.GetExtension(file), ".md", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(Path.GetExtension(file), ".epub", StringComparison.OrdinalIgnoreCase)))
                 {
                     return file;
                 }
@@ -939,8 +941,8 @@ namespace Inkveil
             {
                 var dialog = new OpenFileDialog
                 {
-                    Title = "选择 TXT 小说",
-                    Filter = "文本小说 (*.txt;*.md)|*.txt;*.md|所有文件 (*.*)|*.*",
+                    Title = "选择小说",
+                    Filter = "小说文件 (*.txt;*.md;*.epub)|*.txt;*.md;*.epub|EPUB 小说 (*.epub)|*.epub|文本小说 (*.txt;*.md)|*.txt;*.md|所有文件 (*.*)|*.*",
                     CheckFileExists = true,
                     Multiselect = false
                 };
@@ -999,7 +1001,7 @@ namespace Inkveil
                 _scrollIndicatorThumb.Visibility = Visibility.Collapsed;
             }
             _fileLabel.Text = "尚未打开小说";
-            _statusText.Text = "拖入 TXT 小说，或按 Ctrl+O 打开";
+            _statusText.Text = "拖入 TXT 或 EPUB 小说，或按 Ctrl+O 打开";
             _chapterButtonText.Text = "章节";
             _chapterList.ItemsSource = null;
             UpdateNavigationState();
@@ -1012,7 +1014,10 @@ namespace Inkveil
             {
                 for (int i = 0; i < _book.Chapters.Count; i++)
                 {
-                    options.Add(new ChapterOption(i, _book.Chapters[i].Title));
+                    options.Add(new ChapterOption(
+                        i,
+                        _book.Chapters[i].Title,
+                        _book.Chapters[i].TocDepth));
                 }
             }
             _chapterList.ItemsSource = options;
@@ -1112,28 +1117,35 @@ namespace Inkveil
             };
             document.Blocks.Add(title);
 
-            string[] paragraphs = chapter.Text.Split('\n');
             bool hasContent = false;
-            foreach (string rawParagraph in paragraphs)
+            if (chapter.Blocks.Count > 0)
             {
-                string text = rawParagraph.Trim();
-                if (text.Length == 0)
+                hasContent = AppendEpubBlocks(document, chapter, bodyFont, fontSize);
+            }
+            else
+            {
+                string[] paragraphs = chapter.Text.Split('\n');
+                foreach (string rawParagraph in paragraphs)
                 {
-                    continue;
-                }
+                    string text = rawParagraph.Trim();
+                    if (text.Length == 0)
+                    {
+                        continue;
+                    }
 
-                var paragraph = new Paragraph(new Run(text))
-                {
-                    FontFamily = bodyFont,
-                    FontSize = fontSize,
-                    Foreground = _textBrush,
-                    TextIndent = fontSize * 2,
-                    LineHeight = fontSize * 1.82,
-                    LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
-                    Margin = new Thickness(0, 0, 0, fontSize * 0.35)
-                };
-                document.Blocks.Add(paragraph);
-                hasContent = true;
+                    var paragraph = new Paragraph(new Run(text))
+                    {
+                        FontFamily = bodyFont,
+                        FontSize = fontSize,
+                        Foreground = _textBrush,
+                        TextIndent = fontSize * 2,
+                        LineHeight = fontSize * 1.82,
+                        LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+                        Margin = new Thickness(0, 0, 0, fontSize * 0.35)
+                    };
+                    document.Blocks.Add(paragraph);
+                    hasContent = true;
+                }
             }
 
             if (!hasContent)
@@ -1159,6 +1171,250 @@ namespace Inkveil
             Dispatcher.BeginInvoke(
                 new Action(RestorePendingScrollPosition),
                 DispatcherPriority.Loaded);
+        }
+
+        private bool AppendEpubBlocks(
+            FlowDocument document,
+            NovelChapter chapter,
+            FontFamily bodyFont,
+            double fontSize)
+        {
+            // EPUB 提供结构化块，TXT 仍走原有的纯文本段落渲染。
+            bool hasContent = false;
+            bool isFirstBlock = true;
+            foreach (NovelBlock block in chapter.Blocks)
+            {
+                string plainText = block.GetPlainText();
+                if (block.Kind == NovelBlockKind.Heading
+                    && isFirstBlock
+                    && string.Equals(CleanHeading(plainText), CleanHeading(chapter.Title), StringComparison.Ordinal))
+                {
+                    isFirstBlock = false;
+                    continue;
+                }
+
+                if (block.Kind == NovelBlockKind.Rule)
+                {
+                    document.Blocks.Add(new Paragraph
+                    {
+                        BorderBrush = _textBrush,
+                        BorderThickness = new Thickness(0, 0, 0, 1),
+                        Margin = new Thickness(fontSize * 2, fontSize * 0.5, fontSize * 2, fontSize),
+                        LineHeight = 1
+                    });
+                    hasContent = true;
+                    isFirstBlock = false;
+                    continue;
+                }
+
+                if (block.Kind == NovelBlockKind.Paragraph && ContainsOnlyImages(block) && plainText.Length > 0)
+                {
+                    foreach (NovelInline inline in block.Inlines)
+                    {
+                        if (inline.Kind != NovelInlineKind.Image)
+                        {
+                            continue;
+                        }
+                        Image image = CreateImageElement(inline.Image, GetReaderImageWidth());
+                        if (image == null)
+                        {
+                            continue;
+                        }
+                        image.Margin = new Thickness(0, fontSize * 0.35, 0, fontSize * 0.7);
+                        document.Blocks.Add(new BlockUIContainer(image)
+                        {
+                            Margin = new Thickness(0),
+                            TextAlignment = TextAlignment.Center
+                        });
+                        hasContent = true;
+                    }
+                    isFirstBlock = false;
+                    continue;
+                }
+
+                var paragraph = new Paragraph
+                {
+                    FontFamily = bodyFont,
+                    FontSize = fontSize,
+                    Foreground = _textBrush,
+                    TextIndent = fontSize * 2,
+                    LineHeight = fontSize * 1.82,
+                    LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+                    Margin = new Thickness(0, 0, 0, fontSize * 0.35),
+                    TextAlignment = GetTextAlignment(block.Alignment)
+                };
+
+                if (block.Kind == NovelBlockKind.Heading)
+                {
+                    int level = Clamp(block.Level, 1, 6);
+                    double scale = Math.Max(1.06, 1.34 - (level - 1) * 0.055);
+                    paragraph.FontSize = fontSize * scale;
+                    paragraph.FontWeight = FontWeights.SemiBold;
+                    paragraph.TextIndent = 0;
+                    paragraph.Margin = new Thickness(0, fontSize * 0.25, 0, fontSize * 0.7);
+                    paragraph.LineHeight = fontSize * scale * 1.5;
+                    if (block.Alignment == NovelTextAlignment.Default)
+                    {
+                        paragraph.TextAlignment = TextAlignment.Left;
+                    }
+                }
+                else if (block.Kind == NovelBlockKind.ListItem)
+                {
+                    paragraph.TextIndent = 0;
+                    paragraph.Margin = new Thickness(fontSize * (1.1 + block.Level * 0.7), 0, 0, fontSize * 0.25);
+                }
+                else if (block.Kind == NovelBlockKind.Quote)
+                {
+                    paragraph.FontStyle = FontStyles.Italic;
+                    paragraph.TextIndent = 0;
+                    paragraph.Margin = new Thickness(fontSize * 1.2, fontSize * 0.2, fontSize * 0.8, fontSize * 0.55);
+                    paragraph.BorderBrush = _textBrush;
+                    paragraph.BorderThickness = new Thickness(1, 0, 0, 0);
+                    paragraph.Padding = new Thickness(fontSize * 0.7, 0, 0, 0);
+                }
+
+                foreach (NovelInline inline in block.Inlines)
+                {
+                    if (inline.Kind == NovelInlineKind.Text)
+                    {
+                        var run = new Run(inline.Text)
+                        {
+                            FontWeight = inline.Bold ? FontWeights.Bold : FontWeights.Normal,
+                            FontStyle = inline.Italic ? FontStyles.Italic : FontStyles.Normal
+                        };
+                        if (inline.Underline)
+                        {
+                            run.TextDecorations = TextDecorations.Underline;
+                        }
+                        paragraph.Inlines.Add(run);
+                    }
+                    else if (inline.Kind == NovelInlineKind.LineBreak)
+                    {
+                        paragraph.Inlines.Add(new LineBreak());
+                    }
+                    else if (inline.Kind == NovelInlineKind.Image)
+                    {
+                        Image image = CreateImageElement(inline.Image, Math.Min(320, GetReaderImageWidth()));
+                        if (image != null)
+                        {
+                            paragraph.Inlines.Add(new InlineUIContainer(image)
+                            {
+                                BaselineAlignment = BaselineAlignment.Center
+                            });
+                        }
+                    }
+                }
+
+                if (paragraph.Inlines.Count > 0)
+                {
+                    document.Blocks.Add(paragraph);
+                    hasContent = true;
+                }
+                isFirstBlock = false;
+            }
+            return hasContent;
+        }
+
+        private static bool ContainsOnlyImages(NovelBlock block)
+        {
+            if (block.Inlines.Count == 0)
+            {
+                return false;
+            }
+            foreach (NovelInline inline in block.Inlines)
+            {
+                if (inline.Kind != NovelInlineKind.Image)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private Image CreateImageElement(NovelImage novelImage, double maximumWidth)
+        {
+            if (novelImage == null
+                || novelImage.Data == null
+                || novelImage.Data.Length == 0
+                || string.Equals(novelImage.MediaType, "image/svg+xml", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            try
+            {
+                var bitmap = new BitmapImage();
+                using (var stream = new MemoryStream(novelImage.Data))
+                {
+                    bitmap.BeginInit();
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.StreamSource = stream;
+                    bitmap.EndInit();
+                }
+                bitmap.Freeze();
+
+                var image = new Image
+                {
+                    Source = bitmap,
+                    Stretch = Stretch.Uniform,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    MaxWidth = maximumWidth,
+                    MaxHeight = Math.Max(320, maximumWidth * 1.4),
+                    ToolTip = string.IsNullOrWhiteSpace(novelImage.AltText) ? null : novelImage.AltText
+                };
+                RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+                return image;
+            }
+            catch (NotSupportedException)
+            {
+                return null;
+            }
+            catch (ArgumentException)
+            {
+                return null;
+            }
+            catch (FileFormatException)
+            {
+                return null;
+            }
+            catch (IOException)
+            {
+                return null;
+            }
+        }
+
+        private double GetReaderImageWidth()
+        {
+            double width = _reader == null ? 0 : _reader.ActualWidth;
+            if (width < 320)
+            {
+                width = 720;
+            }
+            return Math.Max(260, Math.Min(760, width - 72));
+        }
+
+        private static TextAlignment GetTextAlignment(NovelTextAlignment alignment)
+        {
+            switch (alignment)
+            {
+                case NovelTextAlignment.Left:
+                    return TextAlignment.Left;
+                case NovelTextAlignment.Center:
+                    return TextAlignment.Center;
+                case NovelTextAlignment.Right:
+                    return TextAlignment.Right;
+                case NovelTextAlignment.Justify:
+                    return TextAlignment.Justify;
+                default:
+                    return TextAlignment.Justify;
+            }
+        }
+
+        private static string CleanHeading(string text)
+        {
+            return string.IsNullOrEmpty(text)
+                ? string.Empty
+                : text.Replace(" ", string.Empty).Replace("　", string.Empty).Trim();
         }
 
         private void RestorePendingScrollPosition()
@@ -2154,18 +2410,22 @@ namespace Inkveil
 
         private sealed class ChapterOption
         {
-            public ChapterOption(int index, string title)
+            public ChapterOption(int index, string title, int depth)
             {
                 Index = index;
                 Title = title;
+                Depth = Math.Max(0, depth);
             }
 
             public int Index { get; private set; }
             public string Title { get; private set; }
+            public int Depth { get; private set; }
 
             public override string ToString()
             {
-                return string.Format("{0:000}   {1}", Index + 1, Title);
+                int indentDepth = Math.Min(Depth, 3);
+                string indent = indentDepth == 0 ? string.Empty : new string('　', indentDepth);
+                return string.Format("{0:000}   {1}{2}", Index + 1, indent, Title);
             }
         }
     }

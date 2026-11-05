@@ -6,16 +6,129 @@ using System.Text.RegularExpressions;
 
 namespace Inkveil
 {
+    public enum NovelBlockKind
+    {
+        Paragraph,
+        Heading,
+        ListItem,
+        Quote,
+        Rule
+    }
+
+    public enum NovelTextAlignment
+    {
+        Default,
+        Left,
+        Center,
+        Right,
+        Justify
+    }
+
+    public enum NovelInlineKind
+    {
+        Text,
+        LineBreak,
+        Image
+    }
+
+    public sealed class NovelImage
+    {
+        public NovelImage(byte[] data, string mediaType, string altText)
+        {
+            Data = data;
+            MediaType = mediaType;
+            AltText = altText;
+        }
+
+        public byte[] Data { get; private set; }
+        public string MediaType { get; private set; }
+        public string AltText { get; private set; }
+    }
+
+    public sealed class NovelInline
+    {
+        public NovelInline(string text, bool bold, bool italic, bool underline)
+        {
+            Kind = NovelInlineKind.Text;
+            Text = text;
+            Bold = bold;
+            Italic = italic;
+            Underline = underline;
+        }
+
+        public NovelInline(NovelInlineKind kind)
+        {
+            Kind = kind;
+        }
+
+        public NovelInline(NovelImage image)
+        {
+            Kind = NovelInlineKind.Image;
+            Image = image;
+        }
+
+        public NovelInlineKind Kind { get; private set; }
+        public string Text { get; internal set; }
+        public bool Bold { get; private set; }
+        public bool Italic { get; private set; }
+        public bool Underline { get; private set; }
+        public NovelImage Image { get; private set; }
+    }
+
+    public sealed class NovelBlock
+    {
+        public NovelBlock(NovelBlockKind kind, List<NovelInline> inlines)
+        {
+            Kind = kind;
+            Inlines = inlines ?? new List<NovelInline>();
+        }
+
+        public NovelBlockKind Kind { get; private set; }
+        public int Level { get; set; }
+        public NovelTextAlignment Alignment { get; set; }
+        public List<NovelInline> Inlines { get; private set; }
+
+        public string GetPlainText()
+        {
+            var text = new StringBuilder();
+            foreach (NovelInline inline in Inlines)
+            {
+                if (inline.Kind == NovelInlineKind.Text)
+                {
+                    text.Append(inline.Text);
+                }
+                else if (inline.Kind == NovelInlineKind.LineBreak)
+                {
+                    text.Append('\n');
+                }
+                else if (inline.Kind == NovelInlineKind.Image)
+                {
+                    text.Append("[图片]");
+                }
+            }
+            return text.ToString().Trim();
+        }
+    }
+
     public sealed class NovelChapter
     {
         public NovelChapter(string title, string text)
+            : this(title, text, null, 0)
+        {
+        }
+
+        internal NovelChapter(string title, string text, List<NovelBlock> blocks, int tocDepth)
         {
             Title = title;
             Text = text;
+            Blocks = blocks ?? new List<NovelBlock>();
+            TocDepth = tocDepth;
         }
 
         public string Title { get; private set; }
         public string Text { get; private set; }
+        public List<NovelBlock> Blocks { get; private set; }
+        public int TocDepth { get; private set; }
     }
 
     public sealed class NovelBook
@@ -32,7 +145,7 @@ namespace Inkveil
             @"^chapter\s+[0-9ivxlcdm]+(?:\s*[:：.\-—].*)?$",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-        private NovelBook(string title, string filePath, List<NovelChapter> chapters)
+        internal NovelBook(string title, string filePath, List<NovelChapter> chapters)
         {
             Title = title;
             FilePath = filePath;
@@ -48,6 +161,11 @@ namespace Inkveil
             if (string.IsNullOrEmpty(filePath))
             {
                 throw new ArgumentException("文件路径不能为空。", "filePath");
+            }
+
+            if (string.Equals(Path.GetExtension(filePath), ".epub", StringComparison.OrdinalIgnoreCase))
+            {
+                return EpubBookLoader.Load(filePath);
             }
 
             byte[] data = File.ReadAllBytes(filePath);

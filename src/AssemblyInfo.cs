@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 
 [assembly: AssemblyTitle("Inkveil")]
-[assembly: AssemblyDescription("轻量透明的 Windows TXT 小说阅读器")]
+[assembly: AssemblyDescription("轻量透明的 Windows TXT / EPUB 小说阅读器")]
 [assembly: AssemblyCompany("Inkveil contributors")]
 [assembly: AssemblyProduct("Inkveil")]
 [assembly: AssemblyCopyright("Copyright © 2026 Inkveil contributors")]

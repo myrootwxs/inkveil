@@ -32,6 +32,7 @@ if (-not (Test-Path -LiteralPath $icon)) {
 $references = @(
     (Join-Path $framework 'System.dll')
     (Join-Path $framework 'System.Core.dll')
+    (Join-Path $framework 'System.IO.Compression.dll')
     (Join-Path $framework 'System.Runtime.Serialization.dll')
     (Join-Path $framework 'System.Xml.dll')
     (Join-Path $framework 'System.Xaml.dll')
@@ -59,6 +60,7 @@ Write-Host "构建完成：$distDirectory\Inkveil.exe"
 
 if ($Test) {
     $testSources = @(
+        (Join-Path $sourceDirectory 'EpubBookLoader.cs')
         (Join-Path $sourceDirectory 'NovelBook.cs')
         (Join-Path $sourceDirectory 'ReaderSettings.cs')
         (Join-Path $testDirectory 'CoreTests.cs')
