@@ -430,7 +430,7 @@ namespace Inkveil
 
             _hintText = new TextBlock
             {
-                Text = "Alt+← / → 切章   ·   Ctrl+滚轮 字号   ·   鼠标移出即隐身",
+                Text = "Alt+← / → 切章   ·   Ctrl+滚轮 字号   ·   切换程序或鼠标移出即隐身",
                 FontFamily = new FontFamily("Microsoft YaHei UI"),
                 FontSize = 10.5,
                 Opacity = 0.5,
@@ -581,7 +581,7 @@ namespace Inkveil
             _topmostCheckBox.Click += delegate { ToggleTopmost(); };
             content.Children.Add(_topmostCheckBox);
 
-            _autoHideCheckBox = CreatePanelCheckBox("鼠标离开时隐藏");
+            _autoHideCheckBox = CreatePanelCheckBox("鼠标离开或切换程序时隐藏");
             _autoHideCheckBox.Click += delegate { ToggleAutoHide(); };
             content.Children.Add(_autoHideCheckBox);
 
@@ -782,6 +782,16 @@ namespace Inkveil
                 if (!_isVisible)
                 {
                     RevealWindow();
+                }
+                return;
+            }
+
+            // 其他程序成为前台窗口后持续隐身，避免鼠标停留在原阅读区域时重新显现。
+            if (!NativeMethods.IsForegroundWindowFromCurrentProcess())
+            {
+                if (_isVisible)
+                {
+                    HideWindow();
                 }
                 return;
             }
