@@ -32,6 +32,7 @@ namespace Inkveil
         private bool _isChoosingFile;
         private bool _updatingChapterList;
         private bool _updatingSettingsPanel;
+        private bool _fontsLoaded;
         private bool _lightText;
         private DateTime _initialRevealUntil;
         private DateTime _suppressHideUntil;
@@ -564,7 +565,6 @@ namespace Inkveil
             _fontCombo.Resources[SystemColors.HighlightTextBrushKey] = MakeBrush("#FFFFFFFF");
             _fontCombo.ItemContainerStyle = CreateComboBoxItemStyle();
             _fontCombo.Template = CreateFontComboBoxTemplate();
-            PopulateSystemFonts();
             _fontCombo.SelectionChanged += OnFontSelectionChanged;
             _fontCombo.DropDownOpened += delegate
             {
@@ -739,6 +739,19 @@ namespace Inkveil
             }
             else
             {
+                if (!_fontsLoaded)
+                {
+                    _updatingSettingsPanel = true;
+                    try
+                    {
+                        PopulateSystemFonts();
+                        _fontsLoaded = true;
+                    }
+                    finally
+                    {
+                        _updatingSettingsPanel = false;
+                    }
+                }
                 UpdateSettingsPanelControls();
                 _settingsPanel.Visibility = Visibility.Visible;
             }
