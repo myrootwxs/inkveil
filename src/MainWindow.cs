@@ -1607,36 +1607,38 @@ namespace Inkveil
         {
             bool control = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
             bool alt = (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt;
+            // Alt 组合键在 WPF 中会包装为 Key.System，真实按键位于 SystemKey。
+            Key pressedKey = e.Key == Key.System ? e.SystemKey : e.Key;
 
-            if (e.Key == Key.Escape && _settingsPanel.Visibility == Visibility.Visible)
+            if (pressedKey == Key.Escape && _settingsPanel.Visibility == Visibility.Visible)
             {
                 _settingsPanel.Visibility = Visibility.Collapsed;
                 e.Handled = true;
                 return;
             }
 
-            if (control && e.Key == Key.O)
+            if (control && pressedKey == Key.O)
             {
                 OpenNovel();
                 e.Handled = true;
                 return;
             }
 
-            if (control && (e.Key == Key.OemPlus || e.Key == Key.Add))
+            if (control && (pressedKey == Key.OemPlus || pressedKey == Key.Add))
             {
                 ChangeFontSize(1);
                 e.Handled = true;
                 return;
             }
 
-            if (control && (e.Key == Key.OemMinus || e.Key == Key.Subtract))
+            if (control && (pressedKey == Key.OemMinus || pressedKey == Key.Subtract))
             {
                 ChangeFontSize(-1);
                 e.Handled = true;
                 return;
             }
 
-            if (control && e.Key == Key.T)
+            if (control && pressedKey == Key.T)
             {
                 _settings.TextTheme = _lightText ? "dark" : "light";
                 ApplyTheme();
@@ -1646,28 +1648,28 @@ namespace Inkveil
                 return;
             }
 
-            if (control && e.Key == Key.P)
+            if (control && pressedKey == Key.P)
             {
                 ToggleTopmost();
                 e.Handled = true;
                 return;
             }
 
-            if (control && e.Key == Key.H)
+            if (control && pressedKey == Key.H)
             {
                 ToggleAutoHide();
                 e.Handled = true;
                 return;
             }
 
-            if (alt && e.Key == Key.Left)
+            if (alt && pressedKey == Key.Left)
             {
                 GoToChapter(_chapterIndex - 1);
                 e.Handled = true;
                 return;
             }
 
-            if (alt && e.Key == Key.Right)
+            if (alt && pressedKey == Key.Right)
             {
                 GoToChapter(_chapterIndex + 1);
                 e.Handled = true;
