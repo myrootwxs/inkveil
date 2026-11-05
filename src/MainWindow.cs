@@ -33,6 +33,7 @@ namespace Inkveil
         private bool _updatingChapterList;
         private bool _updatingSettingsPanel;
         private bool _fontsLoaded;
+        private bool _mouseWheelHookInstalled;
         private bool _lightText;
         private DateTime _initialRevealUntil;
         private DateTime _suppressHideUntil;
@@ -657,6 +658,7 @@ namespace Inkveil
             _initialRevealUntil = DateTime.UtcNow.AddMilliseconds(1100);
             _visibilityTimer.Start();
             _saveTimer.Start();
+            _mouseWheelHookInstalled = NativeMethods.TryInstallMouseWheelHook(OnGlobalMouseWheel);
 
             string pathToOpen = _startupFile;
             if (string.IsNullOrEmpty(pathToOpen)
@@ -691,6 +693,11 @@ namespace Inkveil
         {
             _visibilityTimer.Stop();
             _saveTimer.Stop();
+            if (_mouseWheelHookInstalled)
+            {
+                NativeMethods.UninstallMouseWheelHook();
+                _mouseWheelHookInstalled = false;
+            }
             if (_chapterPopup != null)
             {
                 _chapterPopup.IsOpen = false;
@@ -1199,28 +1206,63 @@ namespace Inkveil
                 return;
             }
 
+            if (HandleMouseWheel(e.Delta))
+            {
+                e.Handled = true;
+            }
+        }
+
+        private bool OnGlobalMouseWheel(NativeMethods.Point cursor, int delta)
+        {
+            if (!IsLoaded
+                || WindowState == WindowState.Minimized
+                || _windowHandle == IntPtr.Zero
+                || !_isVisible
+                || IsPopupInteractionOpen()
+                || (_settingsPanel != null
+                    && _settingsPanel.Visibility == Visibility.Visible
+                    && _settingsPanel.IsMouseOver))
+            {
+                return false;
+            }
+
+            NativeMethods.Rect bounds;
+            if (!NativeMethods.TryGetWindowRect(_windowHandle, out bounds)
+                || cursor.X < bounds.Left
+                || cursor.X >= bounds.Right
+                || cursor.Y < bounds.Top
+                || cursor.Y >= bounds.Bottom
+                || !NativeMethods.IsWindowTopAtPoint(_windowHandle, cursor))
+            {
+                return false;
+            }
+
+            return HandleMouseWheel(delta);
+        }
+
+        private bool HandleMouseWheel(int delta)
+        {
             if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
             {
-                ChangeFontSize(e.Delta > 0 ? 1 : -1);
-                e.Handled = true;
-                return;
+                ChangeFontSize(delta > 0 ? 1 : -1);
+                return true;
             }
 
             if (_book == null || _reader.Visibility != Visibility.Visible)
             {
-                return;
+                return false;
             }
 
             ScrollViewer scrollViewer = GetReaderScrollViewer();
             if (scrollViewer == null)
             {
-                return;
+                return false;
             }
 
             double maximum = Math.Max(0, scrollViewer.ExtentHeight - scrollViewer.ViewportHeight);
-            double target = Clamp(scrollViewer.VerticalOffset - e.Delta, 0, maximum);
+            double target = Clamp(scrollViewer.VerticalOffset - delta, 0, maximum);
             scrollViewer.ScrollToVerticalOffset(target);
-            e.Handled = true;
+            return true;
         }
 
         private void ChangeFontSize(double delta)
