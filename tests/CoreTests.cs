@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using System.Runtime.Serialization.Json;
 using System.Text;
 using Inkveil;
 
@@ -12,6 +14,7 @@ internal static class CoreTests
         TestBookWithoutHeadings();
         TestUtf8BomDecoding();
         TestGb18030Decoding();
+        TestReaderSettingsRoundTrip();
 
         Console.WriteLine("全部核心测试通过：" + _passed);
     }
@@ -59,6 +62,28 @@ internal static class CoreTests
         Encoding encoding = Encoding.GetEncoding(54936);
         byte[] data = encoding.GetBytes("第一章 旧梦\n风从北方来。");
         AssertEqual("第一章 旧梦\n风从北方来。", NovelBook.DecodeText(data), "GB18030 解码");
+    }
+
+    private static void TestReaderSettingsRoundTrip()
+    {
+        var settings = new ReaderSettings
+        {
+            LastBookPath = @"C:\Books\长夜.txt",
+            ChapterIndex = 12,
+            ChapterScrollRatio = 0.375
+        };
+        var serializer = new DataContractJsonSerializer(typeof(ReaderSettings));
+
+        using (var stream = new MemoryStream())
+        {
+            serializer.WriteObject(stream, settings);
+            stream.Position = 0;
+            var restored = (ReaderSettings)serializer.ReadObject(stream);
+
+            AssertEqual(settings.LastBookPath, restored.LastBookPath, "阅读文件持久化");
+            AssertEqual(12, restored.ChapterIndex, "章节进度持久化");
+            AssertEqual(0.375, restored.ChapterScrollRatio, "章节内进度持久化");
+        }
     }
 
     private static void AssertEqual<T>(T expected, T actual, string name)

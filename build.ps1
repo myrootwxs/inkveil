@@ -60,6 +60,7 @@ Write-Host "构建完成：$distDirectory\Inkveil.exe"
 if ($Test) {
     $testSources = @(
         (Join-Path $sourceDirectory 'NovelBook.cs')
+        (Join-Path $sourceDirectory 'ReaderSettings.cs')
         (Join-Path $testDirectory 'CoreTests.cs')
     )
     $testArguments = @(
