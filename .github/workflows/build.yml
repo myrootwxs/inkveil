@@ -1,0 +1,24 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and test
+        shell: powershell
+        run: .\build.ps1 -Test
+
+      - name: Upload application
+        uses: actions/upload-artifact@v4
+        with:
+          name: Inkveil
+          path: dist/Inkveil.exe
+          if-no-files-found: error
