@@ -68,6 +68,15 @@ namespace Inkveil
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool IsWindowVisible(IntPtr window);
 
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+
+        [DllImport("kernel32.dll")]
+        private static extern uint GetCurrentProcessId();
+
         [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
         private static extern IntPtr GetWindowLongPtr64(IntPtr window, int index);
 
@@ -149,6 +158,19 @@ namespace Inkveil
             }
 
             return false;
+        }
+
+        internal static bool IsForegroundWindowFromCurrentProcess()
+        {
+            IntPtr foregroundWindow = GetForegroundWindow();
+            if (foregroundWindow == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            uint processId;
+            return GetWindowThreadProcessId(foregroundWindow, out processId) != 0
+                && processId == GetCurrentProcessId();
         }
 
         internal static void SetClickThrough(IntPtr window, bool enabled)

@@ -431,7 +431,7 @@ namespace Inkveil
 
             _hintText = new TextBlock
             {
-                Text = "Alt+← / → 切章   ·   Ctrl+滚轮 字号   ·   鼠标移出即隐身",
+                Text = "Alt+← / → 切章   ·   Ctrl+滚轮 字号   ·   切换程序或鼠标移出即隐身",
                 FontFamily = new FontFamily("Microsoft YaHei UI"),
                 FontSize = 10.5,
                 Opacity = 0.5,
@@ -582,7 +582,7 @@ namespace Inkveil
             _topmostCheckBox.Click += delegate { ToggleTopmost(); };
             content.Children.Add(_topmostCheckBox);
 
-            _autoHideCheckBox = CreatePanelCheckBox("鼠标离开时隐藏");
+            _autoHideCheckBox = CreatePanelCheckBox("鼠标离开或切换程序时隐藏");
             _autoHideCheckBox.Click += delegate { ToggleAutoHide(); };
             content.Children.Add(_autoHideCheckBox);
 
@@ -670,10 +670,13 @@ namespace Inkveil
 
             if (!string.IsNullOrEmpty(pathToOpen) && File.Exists(pathToOpen))
             {
-                int preferredIndex = string.Equals(pathToOpen, _settings.LastBookPath, StringComparison.OrdinalIgnoreCase)
-                    ? _settings.ChapterIndex
-                    : 0;
-                LoadBook(pathToOpen, preferredIndex);
+                bool restoreProgress = string.Equals(
+                    pathToOpen,
+                    _settings.LastBookPath,
+                    StringComparison.OrdinalIgnoreCase);
+                int preferredIndex = restoreProgress ? _settings.ChapterIndex : 0;
+                double preferredScrollRatio = restoreProgress ? _settings.ChapterScrollRatio : 0;
+                LoadBook(pathToOpen, preferredIndex, preferredScrollRatio);
             }
             else
             {
@@ -793,6 +796,16 @@ namespace Inkveil
                 return;
             }
 
+            // 其他程序成为前台窗口后持续隐身，避免鼠标停留在原阅读区域时重新显现。
+            if (!NativeMethods.IsForegroundWindowFromCurrentProcess())
+            {
+                if (_isVisible)
+                {
+                    HideWindow();
+                }
+                return;
+            }
+
             if (inside)
             {
                 if (!_isVisible)
@@ -887,7 +900,7 @@ namespace Inkveil
             string path = GetDroppedTextFile(e.Data);
             if (!string.IsNullOrEmpty(path))
             {
-                LoadBook(path, 0);
+                LoadBook(path, 0, 0);
             }
             e.Handled = true;
         }
@@ -934,7 +947,7 @@ namespace Inkveil
                 bool? result = dialog.ShowDialog(this);
                 if (result == true)
                 {
-                    LoadBook(dialog.FileName, 0);
+                    LoadBook(dialog.FileName, 0, 0);
                 }
             }
             catch (Exception ex)
@@ -948,7 +961,7 @@ namespace Inkveil
             }
         }
 
-        private void LoadBook(string path, int preferredIndex)
+        private void LoadBook(string path, int preferredIndex, double preferredScrollRatio)
         {
             try
             {
@@ -960,7 +973,7 @@ namespace Inkveil
                 _emptyPanel.Visibility = Visibility.Collapsed;
                 _reader.Visibility = Visibility.Visible;
                 PopulateChapterList();
-                RenderChapter(false);
+                RenderChapter(preferredScrollRatio);
                 RevealWindow();
                 _suppressHideUntil = DateTime.UtcNow.AddMilliseconds(700);
                 QueueSave();
@@ -1060,12 +1073,12 @@ namespace Inkveil
             }
 
             _chapterIndex = target;
-            RenderChapter(false);
+            RenderChapter(0);
             _suppressHideUntil = DateTime.UtcNow.AddMilliseconds(400);
             QueueSave();
         }
 
-        private void RenderChapter(bool preservePosition)
+        private void RenderChapter(double scrollRatio)
         {
             if (_book == null || _book.Chapters.Count == 0)
             {
@@ -1074,7 +1087,6 @@ namespace Inkveil
 
             _chapterIndex = Clamp(_chapterIndex, 0, _book.Chapters.Count - 1);
             NovelChapter chapter = _book.Chapters[_chapterIndex];
-            double ratio = preservePosition ? GetScrollRatio() : 0;
             double fontSize = Clamp(_settings.FontSize, 15, 42);
             FontFamily bodyFont = GetBodyFontFamily();
 
@@ -1139,7 +1151,7 @@ namespace Inkveil
             _reader.Document = document;
             _chapterButtonText.Text = chapter.Title;
             _reader.Effect = CreateReaderShadow();
-            _pendingScrollRatio = ratio;
+            _pendingScrollRatio = Clamp(scrollRatio, 0, 1);
             _hasPendingScroll = true;
             UpdateNavigationState();
             UpdateReadingStatus();
@@ -1205,6 +1217,7 @@ namespace Inkveil
             if (!IsLoaded
                 || WindowState == WindowState.Minimized
                 || _windowHandle == IntPtr.Zero
+                || !_isVisible
                 || IsPopupInteractionOpen()
                 || (_settingsPanel != null
                     && _settingsPanel.Visibility == Visibility.Visible
@@ -1263,7 +1276,7 @@ namespace Inkveil
             _settings.FontSize = next;
             if (_book != null)
             {
-                RenderChapter(true);
+                RenderChapter(GetScrollRatio());
             }
             QueueSave();
         }
@@ -1447,7 +1460,7 @@ namespace Inkveil
             }
             if (renderBook && _book != null)
             {
-                RenderChapter(true);
+                RenderChapter(GetScrollRatio());
             }
             else if (_reader != null && _reader.Document != null)
             {
@@ -1557,7 +1570,7 @@ namespace Inkveil
             _fontCombo.IsDropDownOpen = false;
             if (_book != null)
             {
-                RenderChapter(true);
+                RenderChapter(GetScrollRatio());
             }
             QueueSave();
         }
@@ -1648,36 +1661,38 @@ namespace Inkveil
         {
             bool control = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
             bool alt = (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt;
+            // Alt 组合键在 WPF 中会包装为 Key.System，真实按键位于 SystemKey。
+            Key pressedKey = e.Key == Key.System ? e.SystemKey : e.Key;
 
-            if (e.Key == Key.Escape && _settingsPanel.Visibility == Visibility.Visible)
+            if (pressedKey == Key.Escape && _settingsPanel.Visibility == Visibility.Visible)
             {
                 _settingsPanel.Visibility = Visibility.Collapsed;
                 e.Handled = true;
                 return;
             }
 
-            if (control && e.Key == Key.O)
+            if (control && pressedKey == Key.O)
             {
                 OpenNovel();
                 e.Handled = true;
                 return;
             }
 
-            if (control && (e.Key == Key.OemPlus || e.Key == Key.Add))
+            if (control && (pressedKey == Key.OemPlus || pressedKey == Key.Add))
             {
                 ChangeFontSize(1);
                 e.Handled = true;
                 return;
             }
 
-            if (control && (e.Key == Key.OemMinus || e.Key == Key.Subtract))
+            if (control && (pressedKey == Key.OemMinus || pressedKey == Key.Subtract))
             {
                 ChangeFontSize(-1);
                 e.Handled = true;
                 return;
             }
 
-            if (control && e.Key == Key.T)
+            if (control && pressedKey == Key.T)
             {
                 _settings.TextTheme = _lightText ? "dark" : "light";
                 ApplyTheme();
@@ -1687,28 +1702,28 @@ namespace Inkveil
                 return;
             }
 
-            if (control && e.Key == Key.P)
+            if (control && pressedKey == Key.P)
             {
                 ToggleTopmost();
                 e.Handled = true;
                 return;
             }
 
-            if (control && e.Key == Key.H)
+            if (control && pressedKey == Key.H)
             {
                 ToggleAutoHide();
                 e.Handled = true;
                 return;
             }
 
-            if (alt && e.Key == Key.Left)
+            if (alt && pressedKey == Key.Left)
             {
                 GoToChapter(_chapterIndex - 1);
                 e.Handled = true;
                 return;
             }
 
-            if (alt && e.Key == Key.Right)
+            if (alt && pressedKey == Key.Right)
             {
                 GoToChapter(_chapterIndex + 1);
                 e.Handled = true;
@@ -1737,6 +1752,9 @@ namespace Inkveil
             {
                 _settings.LastBookPath = _book.FilePath;
                 _settings.ChapterIndex = _chapterIndex;
+                _settings.ChapterScrollRatio = _hasPendingScroll
+                    ? _pendingScrollRatio
+                    : GetScrollRatio();
             }
             _settings.FontSize = Clamp(_settings.FontSize, 15, 42);
             _settings.TextTheme = _lightText ? "light" : "dark";
