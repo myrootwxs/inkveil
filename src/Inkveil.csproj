@@ -13,6 +13,7 @@
     <DebugType>none</DebugType>
     <WarningLevel>4</WarningLevel>
     <LangVersion>5</LangVersion>
+    <CodePage>65001</CodePage>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <StartupObject>Inkveil.Program</StartupObject>
     <ApplicationIcon>..\assets\app.ico</ApplicationIcon>

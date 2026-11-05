@@ -9,11 +9,15 @@ $testDirectory = Join-Path $root 'tests'
 $distDirectory = Join-Path $root 'dist'
 $assetsDirectory = Join-Path $root 'assets'
 $csc = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+$msbuild = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe'
 $framework = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319'
 $wpf = Join-Path $framework 'WPF'
 
 if (-not (Test-Path -LiteralPath $csc)) {
     throw "未找到 C# 编译器：$csc"
+}
+if (-not (Test-Path -LiteralPath $msbuild)) {
+    throw "未找到 MSBuild：$msbuild"
 }
 
 if (-not (Test-Path -LiteralPath $distDirectory)) {
@@ -24,10 +28,6 @@ $icon = Join-Path $assetsDirectory 'app.ico'
 if (-not (Test-Path -LiteralPath $icon)) {
     & (Join-Path $root 'tools\New-AppIcon.ps1') -OutputPath $icon
 }
-
-$sources = Get-ChildItem -LiteralPath $sourceDirectory -Filter '*.cs' |
-    Sort-Object Name |
-    ForEach-Object { $_.FullName }
 
 $references = @(
     (Join-Path $framework 'System.dll')
@@ -40,22 +40,18 @@ $references = @(
     (Join-Path $wpf 'PresentationFramework.dll')
 )
 
-$appArguments = @(
-    '/nologo'
-    '/target:winexe'
-    '/platform:anycpu'
-    '/optimize+'
-    '/debug-'
-    '/codepage:65001'
-    "/out:$distDirectory\Inkveil.exe"
-    "/win32icon:$icon"
-    "/win32manifest:$sourceDirectory\app.manifest"
-) + ($references | ForEach-Object { "/reference:$_" }) + $sources
-
 Write-Host '正在编译墨隐阅读器...'
-& $csc $appArguments
+& $msbuild (Join-Path $sourceDirectory 'Inkveil.csproj') `
+    /t:Rebuild `
+    /p:Configuration=Release `
+    /p:Platform=AnyCPU `
+    /nologo `
+    /v:minimal
 if ($LASTEXITCODE -ne 0) {
     throw "编译失败，退出码：$LASTEXITCODE"
+}
+if (-not (Test-Path -LiteralPath (Join-Path $distDirectory 'Inkveil.exe'))) {
+    throw "编译完成但未找到输出文件：$distDirectory\Inkveil.exe"
 }
 
 Copy-Item -LiteralPath (Join-Path $sourceDirectory 'App.config') -Destination (Join-Path $distDirectory 'Inkveil.exe.config') -Force
