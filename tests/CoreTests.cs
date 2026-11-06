@@ -243,6 +243,8 @@ internal static class CoreTests
         var settings = new ReaderSettings
         {
             LastBookPath = @"C:\Books\长夜.txt",
+            FontFamilyName = "正文测试字体",
+            InterfaceFontFamilyName = "界面测试字体",
             ChapterIndex = 12,
             ChapterScrollRatio = 0.375
         };
@@ -255,6 +257,8 @@ internal static class CoreTests
             var restored = (ReaderSettings)serializer.ReadObject(stream);
 
             AssertEqual(settings.LastBookPath, restored.LastBookPath, "阅读文件持久化");
+            AssertEqual(settings.FontFamilyName, restored.FontFamilyName, "正文字体持久化");
+            AssertEqual(settings.InterfaceFontFamilyName, restored.InterfaceFontFamilyName, "界面字体独立持久化");
             AssertEqual(12, restored.ChapterIndex, "章节进度持久化");
             AssertEqual(0.375, restored.ChapterScrollRatio, "章节内进度持久化");
         }

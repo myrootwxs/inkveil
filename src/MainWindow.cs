@@ -45,6 +45,7 @@ namespace Inkveil
         private Border _backgroundLayer;
         private Grid _emptyPanel;
         private TextBlock _fileLabel;
+        private TextBlock _brand;
         private TextBlock _chapterButtonText;
         private TextBlock _statusText;
         private TextBlock _hintText;
@@ -63,6 +64,7 @@ namespace Inkveil
         private ListBox _chapterList;
         private Border _settingsPanel;
         private ComboBox _fontCombo;
+        private ComboBox _interfaceFontCombo;
         private Slider _backgroundOpacitySlider;
         private Slider _textOpacitySlider;
         private TextBlock _backgroundOpacityValue;
@@ -83,6 +85,7 @@ namespace Inkveil
 
             ConfigureWindow();
             BuildInterface();
+            ApplyInterfaceFont();
             ApplyTheme();
             UpdateSettingsPanelControls();
 
@@ -117,8 +120,8 @@ namespace Inkveil
             ShowActivated = true;
             SnapsToDevicePixels = true;
             UseLayoutRounding = true;
-            MinWidth = 620;
-            MinHeight = 500;
+            MinWidth = 360;
+            MinHeight = 240;
             Topmost = _settings.Topmost;
             TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
             TextOptions.SetTextRenderingMode(this, TextRenderingMode.Grayscale);
@@ -146,6 +149,10 @@ namespace Inkveil
             if (string.IsNullOrWhiteSpace(_settings.FontFamilyName))
             {
                 _settings.FontFamilyName = "Microsoft YaHei UI";
+            }
+            if (string.IsNullOrWhiteSpace(_settings.InterfaceFontFamilyName))
+            {
+                _settings.InterfaceFontFamilyName = "Microsoft YaHei UI";
             }
             if (string.IsNullOrWhiteSpace(_settings.TextTheme))
             {
@@ -212,7 +219,7 @@ namespace Inkveil
             Grid.SetRow(topBar, 0);
             _root.Children.Add(topBar);
 
-            var brand = new TextBlock
+            _brand = new TextBlock
             {
                 Text = "墨隐",
                 FontFamily = new FontFamily("Microsoft YaHei UI"),
@@ -222,10 +229,10 @@ namespace Inkveil
                 Margin = new Thickness(0, 0, 12, 0),
                 Cursor = Cursors.SizeAll
             };
-            brand.MouseLeftButtonDown += OnDragAreaMouseDown;
-            RegisterChrome(brand);
-            Grid.SetColumn(brand, 0);
-            topBar.Children.Add(brand);
+            _brand.MouseLeftButtonDown += OnDragAreaMouseDown;
+            RegisterChrome(_brand);
+            Grid.SetColumn(_brand, 0);
+            topBar.Children.Add(_brand);
 
             _fileLabel = new TextBlock
             {
@@ -372,6 +379,7 @@ namespace Inkveil
                 Text = "把小说放进这片空白",
                 FontFamily = new FontFamily("Microsoft YaHei UI"),
                 FontSize = 30,
+                TextWrapping = TextWrapping.Wrap,
                 FontWeight = FontWeights.Light,
                 TextAlignment = TextAlignment.Center,
                 Margin = new Thickness(0, 0, 0, 18)
@@ -395,6 +403,7 @@ namespace Inkveil
                 FontFamily = new FontFamily("Microsoft YaHei UI"),
                 FontSize = 14,
                 LineHeight = 25,
+                TextWrapping = TextWrapping.Wrap,
                 TextAlignment = TextAlignment.Center,
                 Opacity = 0.78
             };
@@ -459,7 +468,7 @@ namespace Inkveil
             };
             VirtualizingStackPanel.SetIsVirtualizing(_chapterList, true);
             VirtualizingStackPanel.SetVirtualizationMode(_chapterList, VirtualizationMode.Recycling);
-            ScrollViewer.SetVerticalScrollBarVisibility(_chapterList, ScrollBarVisibility.Hidden);
+            ScrollViewer.SetVerticalScrollBarVisibility(_chapterList, ScrollBarVisibility.Auto);
             ScrollViewer.SetHorizontalScrollBarVisibility(_chapterList, ScrollBarVisibility.Disabled);
             _chapterList.ItemContainerStyle = CreateChapterItemStyle();
             _chapterList.SelectionChanged += OnChapterListSelectionChanged;
@@ -542,41 +551,17 @@ namespace Inkveil
                 OnTextOpacityChanged));
 
             content.Children.Add(CreatePanelSpacer(14));
-            content.Children.Add(CreatePanelText("系统字体", 12, FontWeights.Normal));
+            content.Children.Add(CreatePanelText("正文字体", 12, FontWeights.Normal));
 
-            _fontCombo = new ComboBox
-            {
-                Height = 36,
-                Margin = new Thickness(0, 6, 0, 0),
-                Background = MakeBrush("#FF2A2621"),
-                Foreground = MakeBrush("#FFF4EEE2"),
-                BorderBrush = MakeBrush("#66D8A45B"),
-                BorderThickness = new Thickness(1),
-                FontFamily = new FontFamily("Microsoft YaHei UI"),
-                FontSize = 13,
-                Padding = new Thickness(8, 0, 4, 0),
-                VerticalContentAlignment = VerticalAlignment.Center,
-                MaxDropDownHeight = 330,
-                IsTextSearchEnabled = true
-            };
-            _fontCombo.Resources[SystemColors.WindowBrushKey] = MakeBrush("#FF1C1916");
-            _fontCombo.Resources[SystemColors.WindowTextBrushKey] = MakeBrush("#FFF4EEE2");
-            _fontCombo.Resources[SystemColors.ControlBrushKey] = MakeBrush("#FF2A2621");
-            _fontCombo.Resources[SystemColors.ControlTextBrushKey] = MakeBrush("#FFF4EEE2");
-            _fontCombo.Resources[SystemColors.HighlightBrushKey] = MakeBrush("#66D8A45B");
-            _fontCombo.Resources[SystemColors.HighlightTextBrushKey] = MakeBrush("#FFFFFFFF");
-            _fontCombo.ItemContainerStyle = CreateComboBoxItemStyle();
-            _fontCombo.Template = CreateFontComboBoxTemplate();
+            _fontCombo = CreateFontCombo();
             _fontCombo.SelectionChanged += OnFontSelectionChanged;
-            _fontCombo.DropDownOpened += delegate
-            {
-                _suppressHideUntil = DateTime.UtcNow.AddSeconds(30);
-            };
-            _fontCombo.DropDownClosed += delegate
-            {
-                _suppressHideUntil = DateTime.UtcNow.AddMilliseconds(450);
-            };
             content.Children.Add(_fontCombo);
+
+            content.Children.Add(CreatePanelSpacer(14));
+            content.Children.Add(CreatePanelText("界面字体", 12, FontWeights.Normal));
+            _interfaceFontCombo = CreateFontCombo();
+            _interfaceFontCombo.SelectionChanged += OnInterfaceFontSelectionChanged;
+            content.Children.Add(_interfaceFontCombo);
 
             content.Children.Add(CreatePanelSpacer(15));
             _topmostCheckBox = CreatePanelCheckBox("窗口置顶");
@@ -615,14 +600,14 @@ namespace Inkveil
             {
                 Width = 344,
                 Padding = new Thickness(18),
-                Margin = new Thickness(0, 58, 18, 0),
+                Margin = new Thickness(0, 58, 18, 8),
                 HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Top,
+                VerticalAlignment = VerticalAlignment.Stretch,
                 Background = MakeBrush("#F5211E1A"),
                 BorderBrush = MakeBrush("#3DFFFFFF"),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(15),
-                Child = content,
+                Child = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled },
                 Visibility = Visibility.Collapsed,
                 Effect = new DropShadowEffect
                 {
@@ -639,6 +624,42 @@ namespace Inkveil
             _root.Children.Add(_settingsPanel);
 
             UpdateSettingsPanelControls();
+        }
+
+        private ComboBox CreateFontCombo()
+        {
+            var combo = new ComboBox
+            {
+                Height = 36,
+                Margin = new Thickness(0, 6, 0, 0),
+                Background = MakeBrush("#FF2A2621"),
+                Foreground = MakeBrush("#FFF4EEE2"),
+                BorderBrush = MakeBrush("#66D8A45B"),
+                BorderThickness = new Thickness(1),
+                FontFamily = new FontFamily("Microsoft YaHei UI"),
+                FontSize = 13,
+                Padding = new Thickness(8, 0, 4, 0),
+                VerticalContentAlignment = VerticalAlignment.Center,
+                MaxDropDownHeight = 330,
+                IsTextSearchEnabled = true
+            };
+            combo.Resources[SystemColors.WindowBrushKey] = MakeBrush("#FF1C1916");
+            combo.Resources[SystemColors.WindowTextBrushKey] = MakeBrush("#FFF4EEE2");
+            combo.Resources[SystemColors.ControlBrushKey] = MakeBrush("#FF2A2621");
+            combo.Resources[SystemColors.ControlTextBrushKey] = MakeBrush("#FFF4EEE2");
+            combo.Resources[SystemColors.HighlightBrushKey] = MakeBrush("#66D8A45B");
+            combo.Resources[SystemColors.HighlightTextBrushKey] = MakeBrush("#FFFFFFFF");
+            combo.ItemContainerStyle = CreateComboBoxItemStyle();
+            combo.Template = CreateFontComboBoxTemplate();
+            combo.DropDownOpened += delegate
+            {
+                _suppressHideUntil = DateTime.UtcNow.AddSeconds(30);
+            };
+            combo.DropDownClosed += delegate
+            {
+                _suppressHideUntil = DateTime.UtcNow.AddMilliseconds(450);
+            };
+            return combo;
         }
 
         private void BuildButtonStyles()
@@ -1444,6 +1465,13 @@ namespace Inkveil
 
         private void OnWindowSizeChanged(object sender, SizeChangedEventArgs e)
         {
+            bool compact = e.NewSize.Width < 620;
+            _brand.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+            _fileLabel.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+            _hintText.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+            _chapterButton.Width = compact ? Math.Max(42, Math.Min(166, e.NewSize.Width - 318)) : 166;
+            _chapterList.Width = Math.Min(374, Math.Max(200, e.NewSize.Width - 40));
+            _settingsPanel.Width = Math.Min(344, e.NewSize.Width - 36);
             if (_book != null)
             {
                 QueueSave();
@@ -1847,6 +1875,7 @@ namespace Inkveil
             foreach (string name in names)
             {
                 _fontCombo.Items.Add(name);
+                _interfaceFontCombo.Items.Add(name);
             }
 
             if (!_systemFontNames.Contains(_settings.FontFamilyName))
@@ -1860,19 +1889,62 @@ namespace Inkveil
 
         private void SelectFontInCombo()
         {
-            if (_fontCombo == null)
+            SelectFontInCombo(_fontCombo, _settings.FontFamilyName);
+            SelectFontInCombo(_interfaceFontCombo, _settings.InterfaceFontFamilyName);
+        }
+
+        private static void SelectFontInCombo(ComboBox combo, string fontName)
+        {
+            if (combo == null)
             {
                 return;
             }
 
-            for (int i = 0; i < _fontCombo.Items.Count; i++)
+            for (int i = 0; i < combo.Items.Count; i++)
             {
-                string name = _fontCombo.Items[i] as string;
-                if (string.Equals(name, _settings.FontFamilyName, StringComparison.CurrentCultureIgnoreCase))
+                string name = combo.Items[i] as string;
+                if (string.Equals(name, fontName, StringComparison.CurrentCultureIgnoreCase))
                 {
-                    _fontCombo.SelectedIndex = i;
+                    combo.SelectedIndex = i;
                     return;
                 }
+            }
+        }
+
+        private void OnInterfaceFontSelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_updatingSettingsPanel || _interfaceFontCombo.SelectedItem == null)
+            {
+                return;
+            }
+            _settings.InterfaceFontFamilyName = (string)_interfaceFontCombo.SelectedItem;
+            _interfaceFontCombo.IsDropDownOpen = false;
+            ApplyInterfaceFont();
+            QueueSave();
+        }
+
+        private void ApplyInterfaceFont()
+        {
+            var font = new FontFamily(_settings.InterfaceFontFamilyName);
+            ApplyInterfaceFont(_root, font);
+            ApplyInterfaceFont(_chapterPopup.Child, font);
+        }
+
+        private void ApplyInterfaceFont(DependencyObject element, FontFamily font)
+        {
+            // 正文有自己的字体设置，不参与界面字体更新。
+            if (element == null || element == _reader)
+            {
+                return;
+            }
+            var text = element as TextBlock;
+            var control = element as Control;
+            if (text != null) text.FontFamily = font;
+            if (control != null) control.FontFamily = font;
+            foreach (object child in LogicalTreeHelper.GetChildren(element))
+            {
+                var childElement = child as DependencyObject;
+                if (childElement != null) ApplyInterfaceFont(childElement, font);
             }
         }
 

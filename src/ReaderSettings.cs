@@ -12,6 +12,7 @@ namespace Inkveil
         {
             FontSize = 21;
             FontFamilyName = "Microsoft YaHei UI";
+            InterfaceFontFamilyName = "Microsoft YaHei UI";
             TextTheme = "light";
             BackgroundOpacity = 0;
             TextOpacity = 100;
@@ -26,6 +27,7 @@ namespace Inkveil
         [DataMember] public double ChapterScrollRatio { get; set; }
         [DataMember] public double FontSize { get; set; }
         [DataMember] public string FontFamilyName { get; set; }
+        [DataMember] public string InterfaceFontFamilyName { get; set; }
         [DataMember] public string TextTheme { get; set; }
         [DataMember] public double BackgroundOpacity { get; set; }
         [DataMember] public double TextOpacity { get; set; }
